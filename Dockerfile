@@ -15,10 +15,6 @@ RUN apt-get update && apt-get install -y \
 RUN python3 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-#Install from a requirements.txt file (recommended for larger projects)
-COPY requirements.txt /tmp/requirements.txt
-RUN pip install -r /tmp/requirements.txt
-
 # Upgrade pip and install colcon-common-extensions
 RUN pip install --upgrade pip
 RUN pip install -U colcon-common-extensions
