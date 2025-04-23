@@ -1,1 +1,3 @@
-TOKEN.txt
+workspace/src/diadem_autonomous_navigation
+workspace/src/rbl_robot_stats
+.ros/
