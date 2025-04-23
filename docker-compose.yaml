@@ -5,8 +5,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      args:
-        - git_personal_token=${GIT_PERSONAL_TOKEN}
     container_name: jazzy_container
     environment:
       - DISPLAY=${DISPLAY}
@@ -15,7 +13,7 @@ services:
       - NVIDIA_DRIVER_CAPABILITIES=all
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
-      - ./workspace/src:/root/workspace/src
+      - ./workspace/src:/root/ros2_ws/src
       - ./.ros/log:/root/.ros/log
     ports:
       - "9091:9091"

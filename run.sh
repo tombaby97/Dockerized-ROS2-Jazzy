@@ -11,9 +11,10 @@ docker run -it \
   --env="DISPLAY=$DISPLAY" \
   --env="QT_X11_NO_MITSHM=1" \
   --volume="/tmp/.X11-unix:/tmp/.X11-unix:rw" \
-  --volume="$PWD/workspace/src/:/root/workspace/src/" \
+  --volume="$PWD/workspace/src/:/root/ros2_ws/src/" \
   --volume="$PWD/.ros/log/:/root/.ros/log/" \
   --env=NVIDIA_VISIBLE_DEVICES=all \
   --env=NVIDIA_DRIVER_CAPABILITIES=all \
   jazzy-image \
-  zsh
+  bash
+  

@@ -27,6 +27,24 @@ RUN apt-get update && apt-get install -y \
 # Install zsh in docker
 RUN sh -c "$(wget -O- https://github.com/deluan/zsh-in-docker/releases/download/v1.1.1/zsh-in-docker.sh)" -- -t robbyrussell
 
+#Install Librealsense
+
+ARG LIBREALSENSE_SOURCE_VERSION=v2.56.1
+ARG REALSENSE_ROS_GIT_URL=https://github.com/IntelRealSense/realsense-ros.git 
+ARG REALSENSE_ROS_VERSION=ros2-master
+
+COPY scripts/build-librealsense.sh /opt/realsense/build-librealsense.sh
+COPY scripts/install-realsense-dependencies.sh /opt/realsense/install-realsense-dependencies.sh
+
+RUN chmod +x /opt/realsense/install-realsense-dependencies.sh && \
+    /opt/realsense/install-realsense-dependencies.sh; \
+    chmod +x /opt/realsense/build-librealsense.sh && /opt/realsense/build-librealsense.sh -n -v ${LIBREALSENSE_SOURCE_VERSION};
+
+# Copy hotplug script for udev rules/hotplug for RealSense
+RUN mkdir -p /opt/realsense/
+COPY scripts/hotplug-realsense.sh /opt/realsense/hotplug-realsense.sh
+COPY udev_rules/99-realsense-libusb-custom.rules /etc/udev/rules.d/99-realsense-libusb-custom.rules
+
 # Set up the ROS 2 repository
 RUN curl -s https://raw.githubusercontent.com/ros/rosdistro/master/ros.asc | apt-key add -
 RUN sh -c 'echo "deb [arch=$(dpkg --print-architecture)] http://packages.ros.org/ros2/ubuntu $(lsb_release -cs) main" > /etc/apt/sources.list.d/ros2-latest.list'
@@ -54,75 +72,6 @@ RUN apt-get install -y --no-install-recommends ros-jazzy-rmw-cyclonedds-cpp
 
 # Add additional if required , similarily like the above commands.
 
-
-
-#Install Librealsense
-
-ARG LIBREALSENSE_SOURCE_VERSION=v2.55.1
-ARG REALSENSE_ROS_GIT_URL=https://github.com/IntelRealSense/realsense-ros.git 
-ARG REALSENSE_ROS_VERSION=ros2-master
-
-COPY scripts/build-librealsense.sh /opt/realsense/build-librealsense.sh
-COPY scripts/install-realsense-dependencies.sh /opt/realsense/install-realsense-dependencies.sh
-
-RUN chmod +x /opt/realsense/install-realsense-dependencies.sh && \
-    /opt/realsense/install-realsense-dependencies.sh; \
-    chmod +x /opt/realsense/build-librealsense.sh && /opt/realsense/build-librealsense.sh -n -v ${LIBREALSENSE_SOURCE_VERSION};
-
-# Copy hotplug script for udev rules/hotplug for RealSense
-RUN mkdir -p /opt/realsense/
-COPY scripts/hotplug-realsense.sh /opt/realsense/hotplug-realsense.sh
-COPY udev_rules/99-realsense-libusb-custom.rules /etc/udev/rules.d/99-realsense-libusb-custom.rules
-
-#Install librealsense2
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-    git \
-    cmake \
-    build-essential \
-    libssl-dev \
-    pkg-config \
-    libusb-1.0-0-dev \
-    libgtk-3-dev \
-    libglfw3-dev \
-    libgl1-mesa-dev \
-    libglu1-mesa-dev && \
-    rm -rf /var/lib/apt/lists/*
-
-# Set a working directory
-WORKDIR /app/librealsense
-
-# Clone the librealsense repository, specifically the 'development' branch
-RUN git clone https://github.com/IntelRealSense/librealsense.git . && \
-    git checkout development
-
-# Create a build directory and navigate into it
-RUN mkdir build && \
-    cd build
-
-# Configure the build with CMake.
-# You can add -DCMAKE_BUILD_TYPE=Release for an optimized build
-# and other options as needed (e.g., -DBUILD_EXAMPLES=true, -DBUILD_GRAPHICAL_EXAMPLES=true)
-RUN cd build && \
-    cmake ..
-
-# Build the library
-RUN cd build && \
-    make -j$(nproc)
-
-# Install the built library and tools
-# If you intend to use the built library in subsequent layers or the final image,
-# you'll likely want to install it.
-RUN cd build && \
-    make install
-
-# Clean up build artifacts to reduce image size
-# This step should ideally be done after installation if you chose to install.
-# If you only need the built files within this layer or a multi-stage build,
-# you might skip the 'make install' and adjust the cleanup.
-RUN rm -rf /app/librealsense/build
-RUN rm -rf /app/librealsense/.git # Remove git history if not needed in the final image
-
 #Install from a requirements.txt file (recommended for larger projects)
 COPY requirements.txt /tmp/requirements.txt
 RUN pip install -r /tmp/requirements.txt
@@ -131,10 +80,10 @@ RUN pip install -r /tmp/requirements.txt
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Create the ROS 2 workspace directory
-RUN mkdir -p /ros2_ws/src
+RUN mkdir -p /root/ros2_ws/src
 
 # Copy the contents of workspace/src to ros2_ws/src
-COPY workspace/src /ros2_ws/src
+COPY workspace/src /root/ros2_ws/src
 
 # Copy the setup script
 COPY setup_ros2_jazzy.sh /
@@ -146,8 +95,43 @@ RUN chmod +x /setup_ros2_jazzy.sh
 COPY source_commands.txt /tmp/source_commands.txt
 RUN cat /tmp/source_commands.txt >> /root/.bashrc && rm /tmp/source_commands.txt
 
+#Setup uros and micro_ros package
+SHELL ["/bin/bash", "-c"]
+
+RUN mkdir -p /root/uros_ws 
+
+WORKDIR /root/uros_ws 
+
+RUN source /opt/ros/jazzy/setup.bash 
+RUN git clone -b jazzy https://github.com/micro-ROS/micro_ros_setup.git src/micro_ros_setup
+RUN apt-get update && apt-get install python3-vcstool -y
+RUN apt-get update && apt-get install python3-colcon-common-extensions -y
+RUN rosdep install --from-paths src --ignore-src -y
+RUN source /opt/ros/jazzy/setup.bash 
+
+# Build the workspace - Add checks before colcon build
+RUN source /opt/ros/jazzy/setup.bash \
+ && source /root/.bashrc \
+ && echo "--- Environment check after sourcing ---" \
+ && echo "AMENT_PREFIX_PATH is: $AMENT_PREFIX_PATH" \
+ && echo "Checking for ament_cmake config file:" \
+ && ls /opt/ros/jazzy/share/ament_cmake/cmake/ament_cmakeConfig.cmake || echo "!!! ament_cmake config file NOT found where expected !!!" \
+ && echo "Checking if colcon can list ament_cmake:" \
+ && colcon list | grep ament_cmake || echo "!!! colcon list did NOT show ament_cmake !!!" \
+ && echo "Checking if ros2 pkg prefix can find ament_cmake:" \
+ && ros2 pkg prefix ament_cmake || echo "!!! ros2 pkg prefix did NOT find ament_cmake !!!" \
+ && echo "--- End environment check ---" \
+ && colcon build \
+ && source install/setup.bash \
+ && ros2 run micro_ros_setup create_agent_ws.sh \
+ && ros2 run micro_ros_setup build_agent.sh 
+
+#Colcon building the ros2_workspace
+WORKDIR /root/ros2_ws
+RUN apt update && rosdep install --from-paths src -y --ignore-src --rosdistro jazzy
+RUN source /opt/ros/jazzy/setup.bash && source /root/.bashrc && colcon build
+WORKDIR /root/
+
 # Set up entrypoint
 ENTRYPOINT ["/setup_ros2_jazzy.sh"]
 
-# Define the volume for the ROS 2 workspace source directory
-VOLUME /ros2_ws/src
