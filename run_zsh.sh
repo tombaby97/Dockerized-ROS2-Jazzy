@@ -17,5 +17,5 @@ docker run -it \
   --env=NVIDIA_VISIBLE_DEVICES=all \
   --env=NVIDIA_DRIVER_CAPABILITIES=all \
   jazzy-image \
-  bash
+  zsh
   
