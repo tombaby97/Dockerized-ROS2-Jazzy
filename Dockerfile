@@ -87,6 +87,7 @@ RUN apt-get install -y --no-install-recommends vim
 RUN apt-get install -y --no-install-recommends net-tools
 RUN apt-get install -y --no-install-recommends ros-jazzy-rmw-cyclonedds-cpp
 RUN apt-get install -y --no-install-recommends ros-jazzy-velodyne*
+RUN apt-get install -y --no-install-recommends ros-jazzy-spatio-temporal-voxel-layer
 
 # Add additional if required , similarily like the above commands.
 
